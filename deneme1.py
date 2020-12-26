@@ -35,11 +35,12 @@ data=pd.read_csv('tertemiz.csv',delimiter=(';'))
 data["duygu"].replace(1, value = "pozitif", inplace = True)
 data["duygu"].replace(0, value = "negatif", inplace = True)
 
+"""
 labels = Counter(data['duygu']).keys()
 sum_ = Counter(data['duygu']).values()
 df = pd.DataFrame(zip(labels,sum_), columns = ['duygu', 'Toplam'])
 
-"""
+
 #etiketlerin görselleştirilmesi - çubuk grafiği
 df.plot(x = 'duygu' , y = 'Toplam',kind = 'bar', legend = False, grid = True, figsize = (15,5))
 plt.title('Kategori Sayılarının Görselleştirilmesi', fontsize = 20)
@@ -97,8 +98,100 @@ model.fit(x_train_tfidf, y_train)
 y_pred = model.predict(x_test_tfidf)
 
 tweet_all_pred = model.predict(tweet_all_tfidf)
-print ("Accuracy={}".format(accuracy_score(y_test, tweet_all_pred[:200])))
+print ("Accuracy={}".format(accuracy_score(y_test,  y_pred)))
+#print ("Accuracy={}".format(accuracy_score(y_test, tweet_all_pred[:200])))
 logisticpred = accuracy_score(y_test, y_pred)
+
+
+tweet['tagged_data']=tweet_all_pred
+"""
+print(tweet.tagged_data)
+
+a=tweet['tagged_data'].loc[tweet.tagged_data == "pozitif" ]
+b=tweet['tagged_data'].loc[tweet.tagged_data == "negatif" ]
+
+
+tweet['poz']=a
+tweet['neg']=b
+"""
+
+import plotly.graph_objects as go
+from plotly.offline import init_notebook_mode, plot
+import plotly.express as px
+
+degerler=pd.read_csv('degerler.csv',delimiter=(';'))
+
+#print(degerler['hasta'])
+
+hasta = go.Scatter(x = degerler.Tarih,
+                    y = degerler.Hasta,
+                    mode = "lines+markers",
+                    name = "Hasta / Cases",
+                    marker = dict(color = 'rgba(135, 206, 250, 0.8)'),
+                    text= degerler.Hasta
+                   )
+olum = go.Scatter(x = degerler.Tarih,
+                    y = degerler.Vefat,
+                    mode = "lines+markers",
+                    name = "Vefat / Death",
+                    marker = dict(color = 'rgba(255, 0, 0, 0.8)'),
+                    text= degerler.Vefat
+                   )
+iyilesen = go.Scatter(x = degerler.Tarih,
+                    y = degerler.Iyilesen,
+                    mode = "lines+markers",
+                    name = "İyileşen / Recovered",
+                    marker = dict(color = 'rgba(0, 255, 0, 0.8)'),
+                    text= degerler.Iyilesen
+                   )
+degerler = [hasta, olum, iyilesen]
+layout = dict(title = "Türkiye'deki Covid-19 Hasta, Vefat ve İyileşen Sayıları ", 
+              xaxis= dict(title= 'Tarih'), yaxis= dict(title= 'Kişi Sayısı'), xaxis_tickangle=-45)
+fig = dict(data = degerler, layout = layout)
+plot(fig)
+
+"""
+
+poz = go.Scatter(x = tweet.tarih,
+                    y = tweet.poz.list.count(),
+                    mode = "lines+markers",
+                    name = "poz / Cases",
+                    marker = dict(color = 'rgba(135, 206, 250, 0.8)'),
+                    text= a.values,
+                   )
+neg = go.Scatter(x = tweet.tarih,
+                    y = tweet.neg.list.count(),
+                    mode = "lines+markers",
+                    name = "neg / Death",
+                    marker = dict(color = 'rgba(255, 0, 0, 0.8)'),
+                    text= b.values
+                   )
+deger = [poz, neg]
+layout = dict(title = "Türkiye'deki Covid-19 poz neg ", 
+              xaxis= dict(title= 'Tarih'), yaxis= dict(title= 'Sayı'), xaxis_tickangle=-45)
+fig = dict(data = deger, layout = layout)
+plot(fig)
+"""
+
+labels = Counter(tweet['tagged_data']).keys()
+sum_ = Counter(tweet['tagged_data']).values()
+df = pd.DataFrame(zip(labels,sum_), columns = ['duygu', 'Toplam'])
+
+
+#etiketlerin görselleştirilmesi - çubuk grafiği
+df.plot(x = 'duygu' , y = 'Toplam',kind = 'bar', legend = False, grid = True, figsize = (15,5))
+plt.title('Kategori Sayılarının Görselleştirilmesi', fontsize = 20)
+plt.xlabel('Kategoriler', fontsize = 15)
+plt.ylabel('Toplam', fontsize = 15);
+#etiketlerin görselleştirilmesi - pasta grafiği
+fig, ax = plt.subplots(figsize=(15, 10))
+ax.pie(df.Toplam, labels =df.duygu, autopct = '%1.2f%%', startangle = 90 )
+ax.axis('equal')
+
+
+
+
+
 
 
 
@@ -109,8 +202,7 @@ from collections import Counter
 list = tweet_all_pred.ravel()
 c= dict(Counter(list))
 print(c)
-"""
-"""
+
 from sklearn.metrics import confusion_matrix
 cm = confusion_matrix(y_test, b_pred[:200])
 sns.heatmap(cm, annot=True, fmt=".0f")
@@ -118,9 +210,7 @@ plt.xlabel('Predicted Values')
 plt.ylabel('Actual Values')
 plt.title('Accuracy Score: {0}'.format(accuracy_score), size = 15)
 plt.show()
-"""
 
-"""
 print(model.score(x_train_tfidf, y_train))
 print(model.score(x_test_tfidf, y_test))
 
