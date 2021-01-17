@@ -1,56 +1,21 @@
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-from wordcloud import WordCloud
-import nltk
+from wordcloud import WordCloud,STOPWORDS
+stopwords = set(STOPWORDS)
 import re
-
 from collections import Counter
 import warnings
 warnings.filterwarnings("ignore")
-
-from nltk import word_tokenize
-from nltk.corpus import stopwords
-from snowballstemmer import TurkishStemmer
-
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from sklearn.multiclass import OneVsRestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.linear_model import SGDClassifier
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.naive_bayes import GaussianNB
-
-#For display all output
-from IPython.core.interactiveshell import InteractiveShell
-InteractiveShell.ast_node_interactivity = "all"
 
 
 data=pd.read_csv('tertemiz.csv',delimiter=(';'))
-#df = df[['veri']]
 
-#sayisallastirma
 data["duygu"].replace(1, value = "pozitif", inplace = True)
 data["duygu"].replace(0, value = "negatif", inplace = True)
 
-"""
-labels = Counter(data['duygu']).keys()
-sum_ = Counter(data['duygu']).values()
-df = pd.DataFrame(zip(labels,sum_), columns = ['duygu', 'Toplam'])
-
-
-#etiketlerin görselleştirilmesi - çubuk grafiği
-df.plot(x = 'duygu' , y = 'Toplam',kind = 'bar', legend = False, grid = True, figsize = (15,5))
-plt.title('Kategori Sayılarının Görselleştirilmesi', fontsize = 20)
-plt.xlabel('Kategoriler', fontsize = 15)
-plt.ylabel('Toplam', fontsize = 15);
-#etiketlerin görselleştirilmesi - pasta grafiği
-fig, ax = plt.subplots(figsize=(15, 10))
-ax.pie(df.Toplam, labels =df.duygu, autopct = '%1.2f%%', startangle = 90 )
-ax.axis('equal')
-"""
 
 # veri onisleme
 tweet = data.copy()
@@ -58,37 +23,37 @@ tweet['veri'] = tweet['veri'].str.lower()
 for i in range(tweet.shape[0]) :
     tweet['veri'][i] = ' '.join(re.sub("(@[A-Za-z0-9]+)|(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)|([^\w\s])|(\d)", " ", tweet['veri'][i]).split())
 
-stoplist=stopwords.words('turkish')
-def remove_stopwords(veri):
-    return " ".join([word for word in str(veri).split() if word not in stoplist])
-tweet['stop_veri'] = tweet['veri'].apply(lambda veri: remove_stopwords(veri))
+#stopwords
 
-"""
-def stemming_tokenizer(veri):
-stemmer = TurkishStemmer()
-return [stemmer.stemWord(w) for w in word_tokenize(veri)]
-tweet['token_veri'] = tweet['stop_veri'].apply(lambda veri: stemming_tokenizer(veri))
-print(tweet['token_veri'].head(20))
-"""
+stop_word_list = open('turkce-stop-words.txt','r').read().split()
+docs = tweet['veri']
+def token(values):
+    filtered_words = [word for word in values.split() if word not in stop_word_list]
+    not_stopword_doc = " ".join(filtered_words)
+    return not_stopword_doc
+docs = docs.map(lambda x: token(x))
+tweet['stop_veri'] = docs
 
-#a=tweet.loc[tweet.duygu == "pozitif" ]
-tag_tweet=tweet.loc[tweet.duygu.isin(['pozitif', 'negatif'])]
-tweet_datas = tag_tweet['stop_veri'].values.tolist()
-tweet_sentiment= tag_tweet['duygu'].values.tolist()
-tweet_all = tweet['stop_veri'].values.tolist()
+#işaretlenenler çekiliyor
+tagged_tweet=tweet.loc[tweet.duygu.isin(['pozitif', 'negatif'])]
+tweet_datas = tagged_tweet['stop_veri'].values.tolist()
+tweet_sentiment= tagged_tweet['duygu'].values.tolist()
+
+tweet_all = tweet['stop_veri'].iloc[730:].values.tolist()
 
 #test ve train olarak ayırma
 x_train, x_test, y_train, y_test = train_test_split(tweet_datas, tweet_sentiment, test_size = 0.25, random_state = 42)
-print('The length of the trainning set are {}'.format(len(x_train)))
-print('The length of the test set are {}'.format(len(x_test)))
+print('Eğitim seti uzunluğu: {}'.format(len(x_train)))
+print('Test seti uzunluğu: {}'.format(len(x_test)))
 
 #tfidf
 tfidf_vectorizer = TfidfVectorizer(ngram_range=(1,2), max_df=0.9, min_df = 5)
 x_train_tfidf = tfidf_vectorizer.fit_transform(x_train)
 x_test_tfidf = tfidf_vectorizer.transform(x_test)
+
 tweet_all_tfidf = tfidf_vectorizer.transform(tweet_all)
 
-#logistic regresyon
+#lOGISTIC REGRESYON
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
 
@@ -96,52 +61,46 @@ model = LogisticRegression()
 model.fit(x_train_tfidf, y_train)
 
 y_pred = model.predict(x_test_tfidf)
+print ("Accuracy={}".format(accuracy_score(y_test,  y_pred)))
 
 tweet_all_pred = model.predict(tweet_all_tfidf)
-print ("Accuracy={}".format(accuracy_score(y_test,  y_pred)))
-#print ("Accuracy={}".format(accuracy_score(y_test, tweet_all_pred[:200])))
-logisticpred = accuracy_score(y_test, y_pred)
 
+#pasta dilimi
+tweet['duygu'].iloc[730:]=tweet_all_pred
+tweet['tagged_data']=tweet['duygu']
 
-tweet['tagged_data']=tweet_all_pred
-"""
-print(tweet.tagged_data)
+labels = Counter(tweet['tagged_data']).keys()
+sum_ = Counter(tweet['tagged_data']).values()
+df = pd.DataFrame(zip(labels,sum_), columns = ['duygu', 'Toplam'])
+fig, ax = plt.subplots(figsize=(15, 10))
+ax.pie(df.Toplam, labels =df.duygu, autopct = '%1.2f%%', startangle = 90 )
+ax.axis('equal')
 
-a=tweet['tagged_data'].loc[tweet.tagged_data == "pozitif" ]
-b=tweet['tagged_data'].loc[tweet.tagged_data == "negatif" ]
-
-
-tweet['poz']=a
-tweet['neg']=b
-"""
-
+#günlük değer
 import plotly.graph_objects as go
-from plotly.offline import init_notebook_mode, plot
-import plotly.express as px
+from plotly.offline import plot
 
 degerler=pd.read_csv('degerler.csv',delimiter=(';'))
-
-#print(degerler['hasta'])
 
 hasta = go.Scatter(x = degerler.Tarih,
                     y = degerler.Hasta,
                     mode = "lines+markers",
                     name = "Hasta / Cases",
-                    marker = dict(color = 'rgba(135, 206, 250, 0.8)'),
+                    marker = dict(color = 'rgb(30, 144, 255)'),
                     text= degerler.Hasta
                    )
 olum = go.Scatter(x = degerler.Tarih,
                     y = degerler.Vefat,
                     mode = "lines+markers",
                     name = "Vefat / Death",
-                    marker = dict(color = 'rgba(255, 0, 0, 0.8)'),
+                    marker = dict(color = 'rgb(255, 69, 0)'),
                     text= degerler.Vefat
                    )
 iyilesen = go.Scatter(x = degerler.Tarih,
                     y = degerler.Iyilesen,
                     mode = "lines+markers",
                     name = "İyileşen / Recovered",
-                    marker = dict(color = 'rgba(0, 255, 0, 0.8)'),
+                    marker = dict(color = 'rgb(50, 205, 50)'),
                     text= degerler.Iyilesen
                    )
 degerler = [hasta, olum, iyilesen]
@@ -150,70 +109,41 @@ layout = dict(title = "Türkiye'deki Covid-19 Hasta, Vefat ve İyileşen Sayıla
 fig = dict(data = degerler, layout = layout)
 plot(fig)
 
-"""
-
-poz = go.Scatter(x = tweet.tarih,
-                    y = tweet.poz.list.count(),
-                    mode = "lines+markers",
-                    name = "poz / Cases",
-                    marker = dict(color = 'rgba(135, 206, 250, 0.8)'),
-                    text= a.values,
-                   )
-neg = go.Scatter(x = tweet.tarih,
-                    y = tweet.neg.list.count(),
-                    mode = "lines+markers",
-                    name = "neg / Death",
-                    marker = dict(color = 'rgba(255, 0, 0, 0.8)'),
-                    text= b.values
-                   )
-deger = [poz, neg]
-layout = dict(title = "Türkiye'deki Covid-19 poz neg ", 
-              xaxis= dict(title= 'Tarih'), yaxis= dict(title= 'Sayı'), xaxis_tickangle=-45)
-fig = dict(data = deger, layout = layout)
-plot(fig)
-"""
-
-labels = Counter(tweet['tagged_data']).keys()
-sum_ = Counter(tweet['tagged_data']).values()
-df = pd.DataFrame(zip(labels,sum_), columns = ['duygu', 'Toplam'])
 
 
-#etiketlerin görselleştirilmesi - çubuk grafiği
-df.plot(x = 'duygu' , y = 'Toplam',kind = 'bar', legend = False, grid = True, figsize = (15,5))
-plt.title('Kategori Sayılarının Görselleştirilmesi', fontsize = 20)
-plt.xlabel('Kategoriler', fontsize = 15)
-plt.ylabel('Toplam', fontsize = 15);
-#etiketlerin görselleştirilmesi - pasta grafiği
-fig, ax = plt.subplots(figsize=(15, 10))
-ax.pie(df.Toplam, labels =df.duygu, autopct = '%1.2f%%', startangle = 90 )
-ax.axis('equal')
-
-
-
-
-
-
-
+def show_wordcloud(data , title = None):
+    wordcloud = WordCloud(background_color='black',stopwords=stopwords,max_words=200,max_font_size=40).generate(str(data))
+    fig = plt.figure(1, figsize=(15, 15))
+    plt.axis('off')
+    plt.title(title, size = 25)
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.show()
+    
+show_wordcloud(tweet['stop_veri'])
+pos = tweet['stop_veri'][tweet['duygu'] == 'pozitif']
+show_wordcloud(pos , 'POZİTİF')
+neg = tweet['stop_veri'][tweet['duygu'] == 'negatif']
+show_wordcloud(neg , 'NEGATİF')
 
 
 
 """
 from collections import Counter
-list = tweet_all_pred.ravel()
+list = tweet['duygu'].ravel()
 c= dict(Counter(list))
 print(c)
-
+"""
+"""
 from sklearn.metrics import confusion_matrix
-cm = confusion_matrix(y_test, b_pred[:200])
+cm = confusion_matrix(y_test, y_pred)
 sns.heatmap(cm, annot=True, fmt=".0f")
-plt.xlabel('Predicted Values')
-plt.ylabel('Actual Values')
-plt.title('Accuracy Score: {0}'.format(accuracy_score), size = 15)
+plt.xlabel('Öngörülen değerler')
+plt.ylabel('Gerçek değerler')
+plt.title('Başarı Skoru: {}'.format(accuracy_score(y_test,  y_pred)), size = 13)
 plt.show()
 
-print(model.score(x_train_tfidf, y_train))
-print(model.score(x_test_tfidf, y_test))
 
 from sklearn.metrics import classification_report
-print(classification_report(y_test, y_pred))
+x=classification_report(y_test, y_pred)
+print(x)
 """
